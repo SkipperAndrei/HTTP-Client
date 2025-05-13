@@ -1,0 +1,521 @@
+#include "utils.h"
+
+void restart_connection() {
+    close(sockfd);
+    sockfd = open_connection(SERVER_IP, SERVER_PORT, AF_INET, SOCK_STREAM, 0);
+    DIE(sockfd < 0, "Connection to server failed...\n");
+}
+
+void log_admin(char*& cookie, char*& jwt) {
+
+    if (cookie) {
+        std::cout << "ERROR: Admin already logged in\n";
+        return;
+    }
+
+    std::cout << "username=";
+    std::string username;
+    std::getline(std::cin, username);
+    std::cout << "password=";
+    std::string password;
+    std::getline(std::cin, password);
+
+    json payload;
+    payload["username"] = username;
+    payload["password"] = password;
+
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();
+
+    // /* Debug */
+    // std::cout << ptr_payload << "\n";
+    char *message;
+    char *response;
+
+    message = compute_post_request(SERVER_IP, ADMIN_LOGIN_URL, CONTENT_TYPE, &ptr_payload, 1, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (!strstr(response, "OK")) {
+        fprintf(stderr, "ERROR: Couldn't authenticate admin\n");
+        free(message);
+        free(response);
+        return;
+    } else {
+        std::cout << "SUCCESS: Admin authentication was successfull\n";
+    }
+
+    char *cookie_line = strstr(response, "Set-Cookie:");
+
+    if (!cookie_line) {
+        fprintf(stderr, "ERROR: HTTP response doesn't have cookie line\n");
+        free(message);
+        free(response);
+        return;
+    }
+
+    char pattern[] = "session=";
+    char *cookie_beginning = strstr(cookie_line, pattern);
+
+    if (cookie_beginning) {
+        cookie_beginning = cookie_beginning + strlen(pattern);
+        char *cookie_end = strchr(cookie_line, ';');
+
+        if (!cookie_end) {
+            fprintf(stderr, "ERROR: HTTP response has bad cookie delimiter\n");
+            free(message);
+            free(response);
+            return;
+        }
+
+        std::string string_cookie(cookie_beginning, cookie_end);
+        cookie = new char[COOKIE_LENGTH];
+        strcpy(cookie, string_cookie.data());
+        logged_as_admin = true;
+
+        free(message);
+        free(response);
+    } else {
+        fprintf(stderr, "ERROR: HTTP response doesn't have cookie value\n");
+        free(message);
+        free(response);
+        return;
+    }
+}
+
+void add_user(char *&cookie, char *&jwt) {
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command is requested by unknown user.\n");
+        return;
+    }
+
+    /* Debug */
+    // std::cout << cookie << "\n";
+
+    if (!logged_as_admin) {
+        fprintf(stderr, "ERROR: Command is requested by non-admin user\n");
+        return;
+    }
+
+    std::cout << "username=";
+    std::string username;
+    std::getline(std::cin, username);
+    std::cout << "password=";
+    std::string password;
+    std::getline(std::cin, password);
+
+    if (username[0] == '\0' || password[0] == '\0') {
+        fprintf(stderr, "ERROR: Incorrect/Incomplete information\n");
+        return;
+    }
+
+    json payload;
+    payload["username"] = username;
+    payload["password"] = password;
+
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();
+
+    char *message;
+    char *response = nullptr;
+
+    message = compute_post_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, CONTENT_TYPE, &ptr_payload, 1, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (!strstr(response, "CREATED"))
+        fprintf(stderr, "ERROR: User couldn't be created\n");
+    else
+        std::cout << "SUCCESS: New user created\n";
+
+    free(message);
+    free(response);
+}
+
+void get_users(char *&cookie, char *&jwt) {
+
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command is requested by unknown user.\n");
+        return;
+    }
+
+    if (!logged_as_admin) {
+        fprintf(stderr, "ERROR: Command is requested by non-admin user.\n");
+        return;
+    }
+
+    char *message;
+    char *response;
+
+    message = compute_get_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, NULL, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "OK")) {
+        std::cout << "SUCCESS: Command returned list of users\n";
+    } else {
+        fprintf(stderr, "ERROR: Get users failed, try again...\n");
+        free(message);
+        free(response);
+        return;
+    }
+
+    std::string string_payload(basic_extract_json_response(response));
+    // std::cout << payload << "\n";
+
+    json json_payload = json::parse(string_payload);
+
+    for (auto &entry : json_payload["users"])
+        std::cout << "#" << entry["id"] << " " << entry["username"] << ":" << entry["password"] << "\n";
+
+    free(message);
+    free(response);
+}
+
+void delete_users(char *&cookie, char *&jwt) {
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: You aren't logged in\n");
+        return;
+    }
+
+    if (!logged_as_admin) {
+        fprintf(stderr, "ERROR: Wrong command, try logout...\n");
+        return;
+    }
+
+    std::cout << "username=";
+    std::string username;
+    std::getline(std::cin, username);
+
+    if (username[0] == '\0') {
+        fprintf(stderr, "ERROR: Invalid username, try again...\n");
+        return;
+    }
+
+    char *message;
+    char *response;
+
+    std::string url;
+    url.append(ADMIN_DELETE_USER_URL);
+    url.append(username);
+    
+    /* Debug */
+    // std::cout << url << "\n";
+
+    message = compute_delete_request(SERVER_IP, (const char *) url.data(), NULL, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+    
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "OK")) {
+        std::cout << "SUCCESS: User " << username << " was deleted\n";
+    } else {
+        fprintf(stderr, "ERROR: The user couldn't be deleted\n");
+    }
+
+    free(message);
+    free(response);
+}
+
+void logout_admin(char *&cookie, char *&jwt) {
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: You aren't logged in\n");
+        return;
+    }
+
+    if (!logged_as_admin) {
+        fprintf(stderr, "ERROR: Wrong command, try logout...\n");
+        return;
+    }
+
+    char *message;
+    char *response;
+    message = compute_get_request(SERVER_IP, ADMIN_LOGOUT_URL, NULL, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    restart_connection();
+
+    /* TODO: Add JWT logic */
+    if (strstr(response, "OK")) {
+        std::cout << "SUCCESS: Admin successfully logged out\n";
+        delete[] cookie;
+        cookie = nullptr;
+
+        if (jwt) {
+            delete[] jwt;
+            jwt = nullptr;
+        }
+
+        logged_as_admin = false;
+    } else {
+        fprintf(stderr, "ERROR: Admin logout failed, try again\n");
+    }
+
+    free(message);
+    free(response);
+}
+
+void login(char *&cookie, char *&jwt) {
+    
+    if (cookie) {
+        fprintf(stderr, "ERROR: A user is already connected\n");
+        return;
+    }
+
+    std::cout << "admin_username=";
+    std::string admin;
+    std::getline(std::cin, admin);
+    std::cout << "username=";
+    std::string username;
+    std::getline(std::cin, username);
+    std::cout << "password=";
+    std::string password;
+    std::getline(std::cin, password);
+
+    json payload;
+    payload["admin_username"] = admin;
+    payload["username"] = username;
+    payload["password"] = password;
+
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();
+
+    char *message;
+    char *response;
+
+    message = compute_post_request(SERVER_IP, USER_LOGIN_URL, CONTENT_TYPE, &ptr_payload, 1, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (!strstr(response, "OK")) {
+        fprintf(stderr, "ERROR: Couldn't authenticate user\n");
+        free(message);
+        free(response);
+        return;
+    } else {
+        std::cout << "SUCCESS: User authentication was successfull\n";
+    }
+
+    char *cookie_line = strstr(response, "Set-Cookie:");
+
+    if (!cookie_line) {
+        fprintf(stderr, "ERROR: HTTP response doesn't have cookie line\n");
+        free(message);
+        free(response);
+        return;
+    }
+
+    char pattern[] = "session=";
+    char *cookie_beginning = strstr(cookie_line, pattern);
+
+    if (cookie_beginning) {
+        cookie_beginning = cookie_beginning + strlen(pattern);
+        char *cookie_end = strchr(cookie_line, ';');
+
+        if (!cookie_end) {
+            fprintf(stderr, "ERROR: HTTP response has bad cookie delimiter\n");
+            free(message);
+            free(response);
+            return;
+        }
+
+        std::string string_cookie(cookie_beginning, cookie_end);
+        cookie = new char[COOKIE_LENGTH];
+        strcpy(cookie, string_cookie.data());
+    } else {
+        fprintf(stderr, "ERROR: HTTP response doesn't have cookie value\n");
+    }
+
+    free(message);
+    free(response);
+}
+
+void get_access(char *&cookie, char *&jwt) {
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    char *message;
+    char *response;
+
+    message = compute_get_request(SERVER_IP, LIBRARY_ACCESS_URL, NULL, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (!strstr(response, "OK")) {
+        fprintf(stderr, "ERROR: Get access command failed...\n");
+        free(message);
+        free(response);
+        return;
+    }
+
+    std::string string_payload(basic_extract_json_response(response));
+    json json_payload = json::parse(string_payload);
+
+    if (jwt) {
+        strcpy(jwt, json_payload["token"].dump().data() + 1);
+        jwt[strlen(jwt) - 1] = '\0';
+        // std::cout << jwt << "\n";
+    } else {
+        jwt = new char[JWT_MAX_LENGTH];
+        strcpy(jwt, json_payload["token"].dump().data() + 1);
+        jwt[strlen(jwt) - 1] = '\0';
+        // std::cout << jwt << "\n";
+    }
+
+    std::cout << "SUCCESS: JWT received from server\n";
+
+    free(message);
+    free(response);
+}
+
+void get_movies(char *&cookie, char *&jwt) {
+    return;
+}
+
+void get_movie(char *&cookie, char *&jwt) {
+    return;
+}
+
+void add_movie(char *&cookie, char *&jwt) {
+    return;
+}
+
+void delete_movie(char *&cookie, char *&jwt) {
+    return;
+}
+
+void update_movie(char *&cookie, char *&jwt) {
+    return;
+}
+
+void get_collections(char *&cookie, char *&jwt) {
+    return;
+}
+
+void get_collection(char *&cookie, char *&jwt) {
+    return;
+}
+
+void add_collection(char *&cookie, char *&jwt) {
+    return;
+}
+
+void delete_collection(char *&cookie, char *&jwt) {
+    return;
+}
+
+void add_movie_to_collection(char *&cookie, char *&jwt) {
+    return;
+}
+
+void delete_movie_to_collection(char *&cookie, char *&jwt) {
+    return;
+}
+
+void log_out(char *&cookie, char *&jwt) {
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: No users logged in...\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Wrong command, try logout_admin...\n");
+        return;
+    }
+
+    char *message;
+    char *response;
+    message = compute_get_request(SERVER_IP, USER_LOGOUT_URL, NULL, cookie);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    restart_connection();
+
+    /* TODO: Add JWT logic */
+    if (strstr(response, "OK")) {
+        std::cout << "SUCCESS: User successfully logged out\n";
+        delete[] cookie;
+        cookie = nullptr;
+
+        if (jwt) {
+            delete[] jwt;
+            jwt = nullptr;
+        }
+
+    } else {
+        fprintf(stderr, "ERROR: User logout failed, try again\n");
+    }
+
+    free(message);
+    free(response);
+
+}
+
+void exit(char *&cookie, char *&jwt) {
+    stop = true;
+    return;
+}
+
+void build_functions(std::unordered_map<std::string, void(*)(char *&, char *&)> &commands) {
+
+    commands["login_admin"] = &log_admin;
+    commands["add_user"] = &add_user;
+    commands["get_users"] = &get_users;
+    commands["delete_user"] = &delete_users;
+    commands["logout_admin"] = &logout_admin;
+    commands["login"] = &login;
+    commands["get_access"] = &get_access;
+    commands["get_movies"] = &get_movies;
+    commands["get_movie"] = &get_movie;
+    commands["add_movie"] = &add_movie;
+    commands["delete_movie"] = &delete_movie;
+    commands["update_movie"] = &update_movie;
+    commands["get_collections"] = &get_collections;
+    commands["get_collection"] = &get_collection;
+    commands["add_collection"] = &add_collection;
+    commands["delete_collection"] = &delete_collection;
+    commands["add_movie_to_collection"] = &add_movie_to_collection;
+    commands["delete_movie_to_collection"] = &delete_movie_to_collection;
+    commands["logout"] = &log_out;
+    commands["exit"] = &exit;   
+}
