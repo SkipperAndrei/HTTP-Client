@@ -10,5 +10,6 @@
 #define LIBRARY_ACCESS_URL "/api/v1/tema/library/access"
 #define ALL_MOVIES_URL "/api/v1/tema/library/movies"
 #define SPECIFIC_MOVIE_URL "/api/v1/tema/library/movies/"
+#define BASE_COLLECTION_URL "/api/v1/tema/library/collections"
 
 #endif

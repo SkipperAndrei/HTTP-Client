@@ -7,6 +7,7 @@
 #include <stdlib.h>     /* exit, atoi, malloc, free */
 #include <unistd.h>     /* read, write, close */
 #include <string.h>     /* memcpy, memset */
+#include <stdexcept>
 #include <sys/socket.h> /* socket, connect */
 #include <netinet/in.h> /* struct sockaddr_in, struct sockaddr */
 #include <netdb.h>      /* struct hostent, gethostbyname */

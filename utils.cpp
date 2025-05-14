@@ -14,7 +14,7 @@ void extract_from_movie_json(char *response) {
     std::string output = json{{"title", response_json["title"]}, 
                                 {"year", response_json["year"]},
                                 {"description", response_json["description"]},
-                                {"rating", non_string_rating}}.dump();
+                                {"rating", non_string_rating}}.dump(4);
     
     std::cout << "SUCCESS: We got the movie\n"; 
     std::cout << output.data() << "\n";
@@ -53,10 +53,10 @@ void log_admin(char*& cookie, char*& jwt) {
     restart_connection();
 
     /* Debug */
-    std::cout << response << "\n";
+    // std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
-        fprintf(stderr, "ERROR: Couldn't authenticate admin\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
         free(message);
         free(response);
         return;
@@ -149,7 +149,7 @@ void add_user(char *&cookie, char *&jwt) {
     // std::cout << response << "\n";
 
     if (!strstr(response, "CREATED"))
-        fprintf(stderr, "ERROR: User couldn't be created\n");
+        fprintf(stderr, "%s\n", basic_extract_json_response(response));
     else
         std::cout << "SUCCESS: New user created\n";
 
@@ -183,7 +183,7 @@ void get_users(char *&cookie, char *&jwt) {
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: Command returned list of users\n";
     } else {
-        fprintf(stderr, "ERROR: Get users failed, try again...\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
         free(message);
         free(response);
         return;
@@ -195,7 +195,7 @@ void get_users(char *&cookie, char *&jwt) {
     json json_payload = json::parse(string_payload);
 
     for (auto &entry : json_payload["users"])
-        std::cout << "#" << entry["id"] << " " << entry["username"] << ":" << entry["password"] << "\n";
+        std::cout << "#" << entry["id"] << " " << entry["username"].get<std::string>() << ":" << entry["password"].get<std::string>() << "\n";
 
     free(message);
     free(response);
@@ -243,7 +243,7 @@ void delete_users(char *&cookie, char *&jwt) {
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: User " << username << " was deleted\n";
     } else {
-        fprintf(stderr, "ERROR: The user couldn't be deleted\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
     }
 
     free(message);
@@ -286,7 +286,7 @@ void logout_admin(char *&cookie, char *&jwt) {
 
         logged_as_admin = false;
     } else {
-        fprintf(stderr, "ERROR: Admin logout failed, try again\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
     }
 
     free(message);
@@ -331,7 +331,7 @@ void login(char *&cookie, char *&jwt) {
     // std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
-        fprintf(stderr, "ERROR: Couldn't authenticate user\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
         free(message);
         free(response);
         return;
@@ -397,10 +397,10 @@ void get_access(char *&cookie, char *&jwt) {
     restart_connection();
 
     /* Debug */
-    std::cout << response << "\n";
+    // std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
-        fprintf(stderr, "ERROR: Get access command failed...\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
         free(message);
         free(response);
         return;
@@ -408,16 +408,15 @@ void get_access(char *&cookie, char *&jwt) {
 
     std::string string_payload(basic_extract_json_response(response));
     json json_payload = json::parse(string_payload);
+    std::string jwt_token = json_payload["token"].get<std::string>();
 
     if (jwt) {
-        strcpy(jwt, json_payload["token"].dump().data() + 1);
-        jwt[strlen(jwt) - 1] = '\0';
-        std::cout << jwt << "\n";
+        strcpy(jwt, jwt_token.data());
+        // std::cout << jwt << "\n";
     } else {
         jwt = new char[JWT_MAX_LENGTH];
-        strcpy(jwt, json_payload["token"].dump().data() + 1);
-        jwt[strlen(jwt) - 1] = '\0';
-        std::cout << jwt << "\n";
+        strcpy(jwt, jwt_token.data());
+        // std::cout << jwt << "\n";
     }
 
     /* Debug */
@@ -453,8 +452,24 @@ void get_movies(char *&cookie, char *&jwt) {
     response = receive_from_server(sockfd);
     restart_connection();
 
+    if (!strstr(response, "OK")) {
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+        free(message);
+        free(response);
+        return;
+    }
+
     /* Debug */
-    std::cout << response << "\n";
+    // std::cout << response << "\n";
+
+    std::cout << "SUCCESS: This is movie list\n";
+    std::string string_payload(basic_extract_json_response(response));
+
+    json json_payload = json::parse(string_payload);
+    int cnt = 1;
+
+    for (auto &entry : json_payload["movies"])
+        std::cout << "#" << entry["id"] << " " << entry["title"].get<std::string>() << "\n"; 
 
     free(message);
     free(response);
@@ -481,6 +496,13 @@ void get_movie(char *&cookie, char *&jwt) {
     std::cout << "id=";
     std::string id_s;
     std::getline(std::cin, id_s);
+
+    try {
+        int integer_id = std::stoi(id_s);
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid input\n");
+        return;
+    }
 
     char *message;
     char *response;
@@ -538,26 +560,50 @@ void add_movie(char *&cookie, char *&jwt) {
     std::cout << "rating=";
     std::string rating_s;
     std::getline(std::cin, rating_s);
-    double rating = atof(rating_s.data());
 
-    if (title[0] == '\0' || year[0] == '\0' || description[0] == '\0' || rating < 0 || rating > 9.9) {
-        fprintf(stderr, "ERROR: Invalid movie input, try again\n");
+    int year_id;
+    double rating;
+
+    try {
+        year_id = std::stoi(year);
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid year\n");
+        return;
+    }
+
+    try {
+        rating = std::stod(rating_s);
+
+        if (rating < 0 || rating > 9.9)
+            throw std::out_of_range("ERROR: Rating must be between 0 and 9.9\n");
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid rating\n");
+        return;
+    } catch (const std::out_of_range& error) {
+        fprintf(stderr, "%s", error.what());
+        return;
+    }
+
+
+    if (title[0] == '\0' || description[0] == '\0') {
+        fprintf(stderr, "ERROR: Invalid/Incomplete title or description\n");
         return;
     }
 
     json payload;
     payload["title"] = title;
-    payload["year"] = atoi(year.data());
+    payload["year"] = year_id;
     payload["description"] = description;
     payload["rating"] = rating; 
 
     std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();    
-
+    char *ptr_payload = serialized_json.data();
     char *message;
     char *response;
 
     message = compute_post_request(SERVER_IP, ALL_MOVIES_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
+    /* Debug */
+    // std::cout << message << "\n";
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -568,7 +614,7 @@ void add_movie(char *&cookie, char *&jwt) {
     if (strstr(response, "CREATED"))
         std::cout << "SUCCESS: Movie was added to the library\n";
     else
-        fprintf(stderr, "ERROR: Movie couldn't be added to the library\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
 
     free(message);
     free(response);
@@ -595,14 +641,19 @@ void delete_movie(char *&cookie, char *&jwt) {
     std::string id_s;
     std::getline(std::cin, id_s);
 
-    if (id_s[0] == '\0') {
-        fprintf(stderr, "ERROR: Invalid movie id, try again\n");
+    int integer_id;
+
+    try {
+        integer_id = std::stoi(id_s);
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid input\n");
         return;
     }
 
     json payload;
-    payload["id"] = atoi(id_s.data());
-    char *ptr_payload = payload.dump().data();
+    payload["id"] = integer_id;
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();
 
     char *message;
     char *response;
@@ -617,16 +668,124 @@ void delete_movie(char *&cookie, char *&jwt) {
     restart_connection();
 
     /* Debug */
-    /* TODO: finish it later after get_movies */
-    std::cout << response << "\n";
+    // std::cout << response << "\n";
+
+    if (strstr(response, "OK"))
+        std::cout << "SUCCESS: Movie was successfully deleted\n";
+    else
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
 
     free(message);
     free(response);
-
 }
 
 void update_movie(char *&cookie, char *&jwt) {
-    return;
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "id=";
+    std::string id_s;
+    std::getline(std::cin, id_s);
+
+    std::cout << "title=";
+    std::string title;
+    std::getline(std::cin, title);
+
+    std::cout << "year=";
+    std::string year;
+    std::getline(std::cin, year);
+
+    std::cout << "description=";
+    std::string description;
+    std::getline(std::cin, description);
+
+    std::cout << "rating=";
+    std::string rating_s;
+    std::getline(std::cin, rating_s);
+
+    int integer_id;
+    int year_id;
+    double rating;
+
+    try {
+        integer_id = std::stoi(id_s);
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid movie ID\n");
+        return;
+    }
+
+    try {
+        year_id = std::stoi(year);
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid year\n");
+        return;
+    }
+
+    try {
+        rating = std::stod(rating_s);
+
+        if (rating < 0 || rating > 9.9)
+            throw std::out_of_range("ERROR: Rating must be between 0 and 9.9\n");
+
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid rating\n");
+        return;
+    } catch (const std::out_of_range& error) {
+        fprintf(stderr, "%s", error.what());
+        return;
+    }
+
+    if (title[0] == '\0' || description[0] == '\0') {
+        fprintf(stderr, "ERROR: Invalid/Incomplete title/description\n");
+        return;
+    }
+    
+    std::string url;
+    url.append(SPECIFIC_MOVIE_URL);
+    url.append(id_s);
+
+    json payload;
+    payload["title"] = title;
+    payload["year"] = year_id;
+    payload["description"] = description;
+    payload["rating"] = rating;
+
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();
+
+    char *message;
+    char *response;
+
+    message = compute_put_request(SERVER_IP, url.data(), CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
+    send_to_server(sockfd, message);
+
+    /* Debug */
+    // std::cout << message << "\n";
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "OK"))
+        std::cout << "SUCCESS: Movie updated successfully\n";
+    else
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+    
+    free(response);
+    free(message);
 }
 
 void get_collections(char *&cookie, char *&jwt) {
@@ -638,7 +797,23 @@ void get_collection(char *&cookie, char *&jwt) {
 }
 
 void add_collection(char *&cookie, char *&jwt) {
-    return;
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    
+
 }
 
 void delete_collection(char *&cookie, char *&jwt) {
@@ -688,7 +863,7 @@ void log_out(char *&cookie, char *&jwt) {
         }
 
     } else {
-        fprintf(stderr, "ERROR: User logout failed, try again\n");
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
     }
 
     free(message);
