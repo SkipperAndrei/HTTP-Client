@@ -43,6 +43,8 @@ extern bool logged_as_admin;
 		} \
 	} while (0)
 
+int check_valid_integer(std::string number);
+double check_valid_double(std::string number);
 void extract_from_movie_json(char *response);
 void restart_connection();
 void log_admin(char *&cookie, char *&jwt);

@@ -1,5 +1,38 @@
 #include "utils.h"
 
+int check_valid_integer(std::string number) {
+
+    int result;
+
+    try {
+        result = std::stoi(number);
+        return result;
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid input\n");
+        return -1;
+    }
+
+}
+
+double check_valid_double(std::string number) {
+
+    double rating;
+    try {
+        rating = std::stod(number);
+
+        if (rating < 0 || rating > 9.9)
+            throw std::out_of_range("ERROR: Rating must be between 0 and 9.9\n");
+        
+        return rating;
+    } catch (const std::invalid_argument& error) {
+        fprintf(stderr, "ERROR: Invalid rating\n");
+        return -1;
+    } catch (const std::out_of_range& error) {
+        fprintf(stderr, "%s", error.what());
+        return -1;
+    }
+}
+
 void restart_connection() {
     close(sockfd);
     sockfd = open_connection(SERVER_IP, SERVER_PORT, AF_INET, SOCK_STREAM, 0);
@@ -497,12 +530,10 @@ void get_movie(char *&cookie, char *&jwt) {
     std::string id_s;
     std::getline(std::cin, id_s);
 
-    try {
-        int integer_id = std::stoi(id_s);
-    } catch (const std::invalid_argument& error) {
-        fprintf(stderr, "ERROR: Invalid input\n");
+    int integer_id = check_valid_integer(id_s);
+    if (integer_id == -1)
         return;
-    }
+
 
     char *message;
     char *response;
@@ -564,26 +595,13 @@ void add_movie(char *&cookie, char *&jwt) {
     int year_id;
     double rating;
 
-    try {
-        year_id = std::stoi(year);
-    } catch (const std::invalid_argument& error) {
-        fprintf(stderr, "ERROR: Invalid year\n");
+    year_id = check_valid_integer(year);
+    if (year_id == -1)
         return;
-    }
 
-    try {
-        rating = std::stod(rating_s);
-
-        if (rating < 0 || rating > 9.9)
-            throw std::out_of_range("ERROR: Rating must be between 0 and 9.9\n");
-    } catch (const std::invalid_argument& error) {
-        fprintf(stderr, "ERROR: Invalid rating\n");
+    rating = check_valid_double(rating_s);
+    if (rating == -1)
         return;
-    } catch (const std::out_of_range& error) {
-        fprintf(stderr, "%s", error.what());
-        return;
-    }
-
 
     if (title[0] == '\0' || description[0] == '\0') {
         fprintf(stderr, "ERROR: Invalid/Incomplete title or description\n");
@@ -641,14 +659,10 @@ void delete_movie(char *&cookie, char *&jwt) {
     std::string id_s;
     std::getline(std::cin, id_s);
 
-    int integer_id;
+    int integer_id = check_valid_integer(id_s);
 
-    try {
-        integer_id = std::stoi(id_s);
-    } catch (const std::invalid_argument& error) {
-        fprintf(stderr, "ERROR: Invalid input\n");
+    if (integer_id == -1)
         return;
-    }
 
     json payload;
     payload["id"] = integer_id;
@@ -715,37 +729,12 @@ void update_movie(char *&cookie, char *&jwt) {
     std::string rating_s;
     std::getline(std::cin, rating_s);
 
-    int integer_id;
-    int year_id;
-    double rating;
+    int integer_id = check_valid_integer(id_s);
+    int year_id = check_valid_integer(year);
+    double rating = check_valid_double(rating_s);
 
-    try {
-        integer_id = std::stoi(id_s);
-    } catch (const std::invalid_argument& error) {
-        fprintf(stderr, "ERROR: Invalid movie ID\n");
+    if (integer_id == -1 || year_id == -1 || rating == -1)
         return;
-    }
-
-    try {
-        year_id = std::stoi(year);
-    } catch (const std::invalid_argument& error) {
-        fprintf(stderr, "ERROR: Invalid year\n");
-        return;
-    }
-
-    try {
-        rating = std::stod(rating_s);
-
-        if (rating < 0 || rating > 9.9)
-            throw std::out_of_range("ERROR: Rating must be between 0 and 9.9\n");
-
-    } catch (const std::invalid_argument& error) {
-        fprintf(stderr, "ERROR: Invalid rating\n");
-        return;
-    } catch (const std::out_of_range& error) {
-        fprintf(stderr, "%s", error.what());
-        return;
-    }
 
     if (title[0] == '\0' || description[0] == '\0') {
         fprintf(stderr, "ERROR: Invalid/Incomplete title/description\n");
@@ -812,7 +801,10 @@ void add_collection(char *&cookie, char *&jwt) {
         return;
     }
 
-    
+    // std::cout << "title=";
+    // std::string title;
+    // std::getline(std::cin, title);
+    return;
 
 }
 
