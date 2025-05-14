@@ -32,14 +32,14 @@ void log_admin(char*& cookie, char*& jwt) {
     char *message;
     char *response;
 
-    message = compute_post_request(SERVER_IP, ADMIN_LOGIN_URL, CONTENT_TYPE, &ptr_payload, 1, cookie);
+    message = compute_post_request(SERVER_IP, ADMIN_LOGIN_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 
     restart_connection();
 
     /* Debug */
-    // std::cout << response << "\n";
+    std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
         fprintf(stderr, "ERROR: Couldn't authenticate admin\n");
@@ -125,7 +125,7 @@ void add_user(char *&cookie, char *&jwt) {
     char *message;
     char *response = nullptr;
 
-    message = compute_post_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, CONTENT_TYPE, &ptr_payload, 1, cookie);
+    message = compute_post_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 
@@ -158,7 +158,7 @@ void get_users(char *&cookie, char *&jwt) {
     char *message;
     char *response;
 
-    message = compute_get_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, NULL, cookie);
+    message = compute_get_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, NULL, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -218,7 +218,7 @@ void delete_users(char *&cookie, char *&jwt) {
     /* Debug */
     // std::cout << url << "\n";
 
-    message = compute_delete_request(SERVER_IP, (const char *) url.data(), NULL, cookie);
+    message = compute_delete_request(SERVER_IP, (const char *) url.data(), NULL, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -250,7 +250,7 @@ void logout_admin(char *&cookie, char *&jwt) {
 
     char *message;
     char *response;
-    message = compute_get_request(SERVER_IP, ADMIN_LOGOUT_URL, NULL, cookie);
+    message = compute_get_request(SERVER_IP, ADMIN_LOGOUT_URL, NULL, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 
@@ -307,7 +307,7 @@ void login(char *&cookie, char *&jwt) {
     char *message;
     char *response;
 
-    message = compute_post_request(SERVER_IP, USER_LOGIN_URL, CONTENT_TYPE, &ptr_payload, 1, cookie);
+    message = compute_post_request(SERVER_IP, USER_LOGIN_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 
@@ -366,16 +366,19 @@ void get_access(char *&cookie, char *&jwt) {
         return;
     }
 
+    /* Debug */
+    // std::cout << "Before : " << cookie << "\n";
+
     char *message;
     char *response;
 
-    message = compute_get_request(SERVER_IP, LIBRARY_ACCESS_URL, NULL, cookie);
+    message = compute_get_request(SERVER_IP, LIBRARY_ACCESS_URL, NULL, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
 
     /* Debug */
-    // std::cout << response << "\n";
+    std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
         fprintf(stderr, "ERROR: Get access command failed...\n");
@@ -390,13 +393,16 @@ void get_access(char *&cookie, char *&jwt) {
     if (jwt) {
         strcpy(jwt, json_payload["token"].dump().data() + 1);
         jwt[strlen(jwt) - 1] = '\0';
-        // std::cout << jwt << "\n";
+        std::cout << jwt << "\n";
     } else {
         jwt = new char[JWT_MAX_LENGTH];
         strcpy(jwt, json_payload["token"].dump().data() + 1);
         jwt[strlen(jwt) - 1] = '\0';
-        // std::cout << jwt << "\n";
+        std::cout << jwt << "\n";
     }
+
+    /* Debug */
+    // std::cout << "After : " << cookie << "\n";
 
     std::cout << "SUCCESS: JWT received from server\n";
 
@@ -409,11 +415,60 @@ void get_movies(char *&cookie, char *&jwt) {
 }
 
 void get_movie(char *&cookie, char *&jwt) {
-    return;
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "id=";
+    int movie_id;
+    std::cin >> movie_id;
+
+    char *message;
+    char *response;
+    std::string movie_url;
+    movie_url.append(SPECIFIC_MOVIE_URL);
+    char ascii_movie_id[MAX_MOVIE_ID_DIGITS] = {0};
+    sprintf(ascii_movie_id, "%d", movie_id);
+    movie_url.append(ascii_movie_id);
+
+    /* Debug */
+    std::cout << movie_url << "\n";
+
+
+    message = compute_get_request(SERVER_IP, movie_url.data(), NULL, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    std::cout << response << "\n";
+
+    free(message);
+    free(response);
+
 }
 
 void add_movie(char *&cookie, char *&jwt) {
+    
+    // if (!cookie) {
+    //     fprintf(stderr, "ERROR: Command requested by unknown user\n");
+    //     return;
+    // }
+
+    // if (!jwt) {
+    //     fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+    //     return;
+    // }
+
     return;
+
 }
 
 void delete_movie(char *&cookie, char *&jwt) {
@@ -462,7 +517,7 @@ void log_out(char *&cookie, char *&jwt) {
 
     char *message;
     char *response;
-    message = compute_get_request(SERVER_IP, USER_LOGOUT_URL, NULL, cookie);
+    message = compute_get_request(SERVER_IP, USER_LOGOUT_URL, NULL, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 

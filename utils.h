@@ -20,6 +20,7 @@
 
 using json = nlohmann::json;
 
+#define MAX_MOVIE_ID_DIGITS 10
 #define MAX_URL_LENGTH 150
 #define COOKIE_LENGTH 500
 #define JWT_MAX_LENGTH 700

@@ -10,7 +10,7 @@
 #include "requests.h"
 
 char *compute_get_request(const char *host, const char *url, char *query_params,
-                            char *cookie)
+                            char *cookie, char *jwt)
 {
     char *message = (char *) calloc(BUFLEN, sizeof(char));
     char *line = (char *) calloc(LINELEN, sizeof(char));
@@ -36,6 +36,11 @@ char *compute_get_request(const char *host, const char *url, char *query_params,
        sprintf(line, "Cookie: session=%s", cookie);
        compute_message(message, line);
     }
+
+    if (jwt) {
+        sprintf(line, "Authorization: Bearer %s", jwt);
+        compute_message(message, line);
+    }
     // Step 4: add final new line
     compute_message(message, "");
     free(line);
@@ -43,7 +48,7 @@ char *compute_get_request(const char *host, const char *url, char *query_params,
 }
 
 char *compute_post_request(const char *host, const char *url, const char* content_type, char **body_data,
-                            int body_data_fields_count, char *cookie)
+                            int body_data_fields_count, char *cookie, char *jwt)
 {
     char *message = (char *) calloc(BUFLEN, sizeof(char));
     char *line = (char *) calloc(LINELEN, sizeof(char));
@@ -87,6 +92,11 @@ char *compute_post_request(const char *host, const char *url, const char* conten
         sprintf(line, "Cookie: session=%s", cookie);
         compute_message(message, line);
     }
+
+    if (jwt) {
+        sprintf(line, "Authorization: Bearer %s", jwt);
+        compute_message(message, line);
+    }
     // Step 5: add new line at end of header
 
     compute_message(message, "");
@@ -100,7 +110,7 @@ char *compute_post_request(const char *host, const char *url, const char* conten
 }
 
 char *compute_delete_request(const char *host, const char *url, char *query_params,
-							char *cookie) {
+							char *cookie, char *jwt) {
     
     char *message = (char *) calloc(BUFLEN, sizeof(char));
     char *line = (char *) calloc(LINELEN, sizeof(char));
@@ -122,6 +132,11 @@ char *compute_delete_request(const char *host, const char *url, char *query_para
     if (cookie) {
        sprintf(line, "Cookie: session=%s", cookie);
        compute_message(message, line);
+    }
+
+    if (jwt) {
+        sprintf(line, "Authorization: Bearer %s", jwt);
+        compute_message(message, line);
     }
 
     compute_message(message, "");

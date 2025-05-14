@@ -8,5 +8,7 @@
 #define USER_LOGIN_URL "/api/v1/tema/user/login"
 #define USER_LOGOUT_URL "/api/v1/tema/user/logout"
 #define LIBRARY_ACCESS_URL "/api/v1/tema/library/access"
+#define ALL_MOVIES_URL "/api/v1/tema/library/movies"
+#define SPECIFIC_MOVIE_URL "/api/v1/tema/library/movies/"
 
 #endif
