@@ -42,6 +42,7 @@ extern bool logged_as_admin;
 		} \
 	} while (0)
 
+void extract_from_movie_json(char *response);
 void restart_connection();
 void log_admin(char *&cookie, char *&jwt);
 void add_user(char *&cookie, char *&jwt);

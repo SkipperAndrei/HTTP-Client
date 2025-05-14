@@ -6,6 +6,20 @@ void restart_connection() {
     DIE(sockfd < 0, "Connection to server failed...\n");
 }
 
+void extract_from_movie_json(char *response) {
+
+    json response_json = json::parse(basic_extract_json_response(response));
+    std::string string_rating(response_json["rating"]);
+    double non_string_rating = atof(string_rating.data());
+    std::string output = json{{"title", response_json["title"]}, 
+                                {"year", response_json["year"]},
+                                {"description", response_json["description"]},
+                                {"rating", non_string_rating}}.dump();
+    
+    std::cout << "SUCCESS: We got the movie\n"; 
+    std::cout << output.data() << "\n";
+}
+
 void log_admin(char*& cookie, char*& jwt) {
 
     if (cookie) {
@@ -366,6 +380,11 @@ void get_access(char *&cookie, char *&jwt) {
         return;
     }
 
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
     /* Debug */
     // std::cout << "Before : " << cookie << "\n";
 
@@ -411,13 +430,13 @@ void get_access(char *&cookie, char *&jwt) {
 }
 
 void get_movies(char *&cookie, char *&jwt) {
-    return;
-}
-
-void get_movie(char *&cookie, char *&jwt) {
-    
     if (!cookie) {
         fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
         return;
     }
 
@@ -426,23 +445,10 @@ void get_movie(char *&cookie, char *&jwt) {
         return;
     }
 
-    std::cout << "id=";
-    int movie_id;
-    std::cin >> movie_id;
-
     char *message;
     char *response;
-    std::string movie_url;
-    movie_url.append(SPECIFIC_MOVIE_URL);
-    char ascii_movie_id[MAX_MOVIE_ID_DIGITS] = {0};
-    sprintf(ascii_movie_id, "%d", movie_id);
-    movie_url.append(ascii_movie_id);
 
-    /* Debug */
-    std::cout << movie_url << "\n";
-
-
-    message = compute_get_request(SERVER_IP, movie_url.data(), NULL, cookie, jwt);
+    message = compute_get_request(SERVER_IP, ALL_MOVIES_URL, NULL, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -455,24 +461,168 @@ void get_movie(char *&cookie, char *&jwt) {
 
 }
 
+void get_movie(char *&cookie, char *&jwt) {
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "id=";
+    std::string id_s;
+    std::getline(std::cin, id_s);
+
+    char *message;
+    char *response;
+    std::string movie_url;
+    movie_url.append(SPECIFIC_MOVIE_URL);
+    movie_url.append(id_s.data());
+
+    /* Debug */
+    // std::cout << movie_url << "\n";
+
+    message = compute_get_request(SERVER_IP, movie_url.data(), NULL, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "OK"))
+        extract_from_movie_json(response);
+    else
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+
+    free(message);
+    free(response);
+
+}
+
 void add_movie(char *&cookie, char *&jwt) {
     
-    // if (!cookie) {
-    //     fprintf(stderr, "ERROR: Command requested by unknown user\n");
-    //     return;
-    // }
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
 
-    // if (!jwt) {
-    //     fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
-    //     return;
-    // }
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
 
-    return;
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "title=";
+    std::string title;
+    std::getline(std::cin, title);
+    std::cout << "year=";
+    std::string year;
+    std::getline(std::cin, year);
+    std::cout << "description=";
+    std::string description;
+    std::getline(std::cin, description);
+    std::cout << "rating=";
+    std::string rating_s;
+    std::getline(std::cin, rating_s);
+    double rating = atof(rating_s.data());
+
+    if (title[0] == '\0' || year[0] == '\0' || description[0] == '\0' || rating < 0 || rating > 9.9) {
+        fprintf(stderr, "ERROR: Invalid movie input, try again\n");
+        return;
+    }
+
+    json payload;
+    payload["title"] = title;
+    payload["year"] = atoi(year.data());
+    payload["description"] = description;
+    payload["rating"] = rating; 
+
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();    
+
+    char *message;
+    char *response;
+
+    message = compute_post_request(SERVER_IP, ALL_MOVIES_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "CREATED"))
+        std::cout << "SUCCESS: Movie was added to the library\n";
+    else
+        fprintf(stderr, "ERROR: Movie couldn't be added to the library\n");
+
+    free(message);
+    free(response);
 
 }
 
 void delete_movie(char *&cookie, char *&jwt) {
-    return;
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "id=";
+    std::string id_s;
+    std::getline(std::cin, id_s);
+
+    if (id_s[0] == '\0') {
+        fprintf(stderr, "ERROR: Invalid movie id, try again\n");
+        return;
+    }
+
+    json payload;
+    payload["id"] = atoi(id_s.data());
+    char *ptr_payload = payload.dump().data();
+
+    char *message;
+    char *response;
+
+    std::string url;
+    url.append(SPECIFIC_MOVIE_URL);
+    url.append(id_s);
+
+    message = compute_delete_request(SERVER_IP, url.data(), NULL, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    /* TODO: finish it later after get_movies */
+    std::cout << response << "\n";
+
+    free(message);
+    free(response);
+
 }
 
 void update_movie(char *&cookie, char *&jwt) {
