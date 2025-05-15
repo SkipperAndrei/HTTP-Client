@@ -39,15 +39,48 @@ void restart_connection() {
     DIE(sockfd < 0, "Connection to server failed...\n");
 }
 
+void append_movie_at_collection(char *cookie, char *jwt, std::string coll_id_s, int movie_id) {
+
+    std::string url;
+    url.append(COLLECTION_OPS_URL);
+    url.append(coll_id_s);
+    url.append(MOVIE_TERMINATOR);
+
+    json payload;
+    payload["id"] = movie_id;
+
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();
+
+    char *message;
+    char *response;
+
+    message = compute_post_request(SERVER_IP, url.data(), CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "CREATED")) {
+        std::cout << "SUCCESS: Movie added to collection successfully\n";
+    } else {
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+    }
+
+    free(message);
+    free(response);
+}
+
 void extract_from_movie_json(char *response) {
 
     json response_json = json::parse(basic_extract_json_response(response));
     std::string string_rating(response_json["rating"]);
-    double non_string_rating = atof(string_rating.data());
     std::string output = json{{"title", response_json["title"]}, 
                                 {"year", response_json["year"]},
                                 {"description", response_json["description"]},
-                                {"rating", non_string_rating}}.dump(4);
+                                {"rating", string_rating}}.dump(4);
     
     std::cout << "SUCCESS: We got the movie\n"; 
     std::cout << output.data() << "\n";
@@ -182,7 +215,7 @@ void add_user(char *&cookie, char *&jwt) {
     // std::cout << response << "\n";
 
     if (!strstr(response, "CREATED"))
-        fprintf(stderr, "%s\n", basic_extract_json_response(response));
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
     else
         std::cout << "SUCCESS: New user created\n";
 
@@ -751,6 +784,7 @@ void update_movie(char *&cookie, char *&jwt) {
     payload["description"] = description;
     payload["rating"] = rating;
 
+
     std::string serialized_json = payload.dump();
     char *ptr_payload = serialized_json.data();
 
@@ -801,11 +835,67 @@ void add_collection(char *&cookie, char *&jwt) {
         return;
     }
 
-    // std::cout << "title=";
-    // std::string title;
-    // std::getline(std::cin, title);
-    return;
+    std::cout << "title=";
+    std::string title;
+    std::getline(std::cin, title);
 
+    std::cout << "num_movies=";
+    std::string movies_s;
+    std::getline(std::cin, movies_s);
+
+    int nr_of_movies = check_valid_integer(movies_s);
+
+    if (nr_of_movies == -1)
+        return;
+
+    std::vector<std::string> movie_ids(nr_of_movies + 1);
+    bool invalid_input = false;
+
+    for (int i = 0; i < nr_of_movies; i++) {
+        std::cout << "movie_id[" << i << "]=";
+        std::getline(std::cin, movie_ids[i]);
+        if (check_valid_integer(movie_ids[i]) < 0)
+            invalid_input = true;
+    }
+
+    if (invalid_input)
+        return;
+
+    char *message;
+    char *response;
+
+    json payload;
+    payload["title"] = title;
+
+    std::string serialized_payload = payload.dump();
+    char *ptr_payload = serialized_payload.data();
+    message = compute_post_request(SERVER_IP, BASE_COLLECTION_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
+
+    // std::cout << message << "\n";
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (!strstr(response, "CREATED")) {
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+        free(message);
+        free(response);
+        return;
+    }
+
+    json returned_json = json::parse(basic_extract_json_response(response));
+    int coll_id = returned_json["id"];
+
+    // TODO: after making add_movie_to_collection
+    for (int i = 0; i < nr_of_movies; i++) {
+        append_movie_at_collection(cookie, jwt, std::to_string(coll_id), check_valid_integer(movie_ids[i]));
+    }
+
+    free(message);
+    free(response);
 }
 
 void delete_collection(char *&cookie, char *&jwt) {
@@ -813,7 +903,37 @@ void delete_collection(char *&cookie, char *&jwt) {
 }
 
 void add_movie_to_collection(char *&cookie, char *&jwt) {
-    return;
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "collection_id=";
+    std::string coll_id_s;
+    std::getline(std::cin, coll_id_s);
+
+    std::cout << "movie_id=";
+    std::string movie_id_s;
+    std::getline(std::cin, movie_id_s);
+
+    int movie_id = check_valid_integer(movie_id_s), coll_id = check_valid_integer(coll_id_s);
+
+    if (coll_id < 0 || movie_id < 0) {
+        return;
+    }
+
+    append_movie_at_collection(cookie, jwt, coll_id_s, movie_id);
+ 
 }
 
 void delete_movie_to_collection(char *&cookie, char *&jwt) {
@@ -843,7 +963,6 @@ void log_out(char *&cookie, char *&jwt) {
 
     restart_connection();
 
-    /* TODO: Add JWT logic */
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: User successfully logged out\n";
         delete[] cookie;

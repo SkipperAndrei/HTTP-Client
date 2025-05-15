@@ -11,5 +11,7 @@
 #define ALL_MOVIES_URL "/api/v1/tema/library/movies"
 #define SPECIFIC_MOVIE_URL "/api/v1/tema/library/movies/"
 #define BASE_COLLECTION_URL "/api/v1/tema/library/collections"
+#define COLLECTION_OPS_URL "/api/v1/tema/library/collections/"
+#define MOVIE_TERMINATOR "/movies"
 
 #endif
