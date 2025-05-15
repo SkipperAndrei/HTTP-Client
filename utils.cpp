@@ -60,11 +60,41 @@ void append_movie_at_collection(char *cookie, char *jwt, std::string coll_id_s, 
     response = receive_from_server(sockfd);
     restart_connection();
 
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "CREATED")) {
         std::cout << "SUCCESS: Movie added to collection successfully\n";
+    } else {
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+    }
+
+    free(message);
+    free(response);
+}
+
+void delete_from_collection(char *cookie, char *jwt, std::string coll_id_s, int movie_id) {
+
+    std::string url;
+    url.append(COLLECTION_OPS_URL);
+    url.append(coll_id_s);
+    url.append(MOVIE_TERMINATOR);
+
+    json payload;
+    payload["id"] = movie_id;
+
+    std::string serialized_json = payload.dump();
+    char *ptr_payload = serialized_json.data();
+
+    char *message;
+    char *response;
+
+    message = compute_delete_request(SERVER_IP, url.data(), nullptr, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+
+    if (strstr(response, "OK")) {
+        std::cout << "SUCCESS: Movie deleted from collection successfully\n";
     } else {
         fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
     }
@@ -238,7 +268,7 @@ void get_users(char *&cookie, char *&jwt) {
     char *message;
     char *response;
 
-    message = compute_get_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, NULL, cookie, jwt);
+    message = compute_get_request(SERVER_IP, ADMIN_USER_ACTIONS_URL, nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -298,7 +328,7 @@ void delete_users(char *&cookie, char *&jwt) {
     /* Debug */
     // std::cout << url << "\n";
 
-    message = compute_delete_request(SERVER_IP, (const char *) url.data(), NULL, cookie, jwt);
+    message = compute_delete_request(SERVER_IP, (const char *) url.data(), nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -330,7 +360,7 @@ void logout_admin(char *&cookie, char *&jwt) {
 
     char *message;
     char *response;
-    message = compute_get_request(SERVER_IP, ADMIN_LOGOUT_URL, NULL, cookie, jwt);
+    message = compute_get_request(SERVER_IP, ADMIN_LOGOUT_URL, nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 
@@ -457,7 +487,7 @@ void get_access(char *&cookie, char *&jwt) {
     char *message;
     char *response;
 
-    message = compute_get_request(SERVER_IP, LIBRARY_ACCESS_URL, NULL, cookie, jwt);
+    message = compute_get_request(SERVER_IP, LIBRARY_ACCESS_URL, nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -513,7 +543,7 @@ void get_movies(char *&cookie, char *&jwt) {
     char *message;
     char *response;
 
-    message = compute_get_request(SERVER_IP, ALL_MOVIES_URL, NULL, cookie, jwt);
+    message = compute_get_request(SERVER_IP, ALL_MOVIES_URL, nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -577,7 +607,7 @@ void get_movie(char *&cookie, char *&jwt) {
     /* Debug */
     // std::cout << movie_url << "\n";
 
-    message = compute_get_request(SERVER_IP, movie_url.data(), NULL, cookie, jwt);
+    message = compute_get_request(SERVER_IP, movie_url.data(), nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -709,7 +739,7 @@ void delete_movie(char *&cookie, char *&jwt) {
     url.append(SPECIFIC_MOVIE_URL);
     url.append(id_s);
 
-    message = compute_delete_request(SERVER_IP, url.data(), NULL, cookie, jwt);
+    message = compute_delete_request(SERVER_IP, url.data(), nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
@@ -812,11 +842,116 @@ void update_movie(char *&cookie, char *&jwt) {
 }
 
 void get_collections(char *&cookie, char *&jwt) {
-    return;
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    char *message;
+    char *response;
+
+    message = compute_get_request(SERVER_IP, BASE_COLLECTION_URL, NULL, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "OK")) {
+        std::cout << "SUCCESS: Collections details\n";
+    } else {
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+        free(message);
+        free(response);
+        return;
+    }
+
+    json returned_json = json::parse(basic_extract_json_response(response));
+
+    for (auto &entry : returned_json["collections"])
+        std::cout << "#" << entry["id"] << ": " << entry["title"].get<std::string>() << "\n";
+
+    free(message);
+    free(response);
+
 }
 
 void get_collection(char *&cookie, char *&jwt) {
-    return;
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "id=";
+    std::string id_s;
+    std::getline(std::cin, id_s);
+
+    int id = check_valid_integer(id_s);
+    if (id < 0)
+        return;
+
+    std::string url;
+    url.append(COLLECTION_OPS_URL);
+    url.append(id_s);
+
+    json payload;
+    payload["id"] = id;
+
+    std::string payload_serial = payload.dump();
+    char *ptr_payload = payload_serial.data();
+
+    char *message;
+    char *response;
+
+    message = compute_get_request(SERVER_IP, url.data(), nullptr, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    /* Debug */
+    // std::cout << response << "\n";
+
+    if (strstr(response, "OK")) {
+        std::cout << "SUCCESS: Collection details\n";
+    } else {
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+        free(message);
+        free(response);
+        return;
+    }
+
+    json returned_json = json::parse(basic_extract_json_response(response));
+
+    std::cout << "title: " << returned_json["title"].get<std::string>() << "\n";
+    std::cout << "owner: " << returned_json["owner"].get<std::string>() << "\n";
+
+    for (auto &entry : returned_json["movies"])
+        std::cout << "#" << entry["id"] << ": " << entry["title"].get<std::string>() << "\n";
+
+    free(message);
+    free(response);    
+
 }
 
 void add_collection(char *&cookie, char *&jwt) {
@@ -899,7 +1034,38 @@ void add_collection(char *&cookie, char *&jwt) {
 }
 
 void delete_collection(char *&cookie, char *&jwt) {
-    return;
+    
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "collection_id=";
+    std::string coll_id_s;
+    std::getline(std::cin, coll_id_s);
+
+    std::cout << "movie_id=";
+    std::string movie_id_s;
+    std::getline(std::cin, movie_id_s);
+
+    int movie_id = check_valid_integer(movie_id_s), coll_id = check_valid_integer(coll_id_s);
+
+    if (coll_id < 0 || movie_id < 0) {
+        return;
+    }
+
+
+
 }
 
 void add_movie_to_collection(char *&cookie, char *&jwt) {
@@ -936,8 +1102,37 @@ void add_movie_to_collection(char *&cookie, char *&jwt) {
  
 }
 
-void delete_movie_to_collection(char *&cookie, char *&jwt) {
-    return;
+void delete_movie_from_collection(char *&cookie, char *&jwt) {
+    if (!cookie) {
+        fprintf(stderr, "ERROR: Command requested by unknown user\n");
+        return;
+    }
+
+    if (logged_as_admin) {
+        fprintf(stderr, "ERROR: Command invalid for admin\n");
+        return;
+    }
+
+    if (!jwt) {
+        fprintf(stderr, "ERROR: Access token invalid or expired, try again...\n");
+        return;
+    }
+
+    std::cout << "collection_id=";
+    std::string coll_id_s;
+    std::getline(std::cin, coll_id_s);
+
+    std::cout << "movie_id=";
+    std::string movie_id_s;
+    std::getline(std::cin, movie_id_s);
+
+    int movie_id = check_valid_integer(movie_id_s), coll_id = check_valid_integer(coll_id_s);
+
+    if (coll_id < 0 || movie_id < 0) {
+        return;
+    }
+
+    delete_from_collection(cookie, jwt, coll_id_s, movie_id);
 }
 
 void log_out(char *&cookie, char *&jwt) {
@@ -954,7 +1149,7 @@ void log_out(char *&cookie, char *&jwt) {
 
     char *message;
     char *response;
-    message = compute_get_request(SERVER_IP, USER_LOGOUT_URL, NULL, cookie, jwt);
+    message = compute_get_request(SERVER_IP, USER_LOGOUT_URL, nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 
@@ -1006,7 +1201,7 @@ void build_functions(std::unordered_map<std::string, void(*)(char *&, char *&)> 
     commands["add_collection"] = &add_collection;
     commands["delete_collection"] = &delete_collection;
     commands["add_movie_to_collection"] = &add_movie_to_collection;
-    commands["delete_movie_to_collection"] = &delete_movie_to_collection;
+    commands["delete_movie_from_collection"] = &delete_movie_from_collection;
     commands["logout"] = &log_out;
     commands["exit"] = &exit;   
 }
