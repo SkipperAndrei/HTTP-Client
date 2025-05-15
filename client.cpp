@@ -6,35 +6,36 @@ bool logged_as_admin = false;
 
 int main(int argc, char **argv) {
 
-    sockfd = open_connection(SERVER_IP, SERVER_PORT, AF_INET, SOCK_STREAM, 0);
-    DIE(sockfd < 0, "Connection to server failed...\n");
+	sockfd = open_connection(SERVER_IP, SERVER_PORT, AF_INET, SOCK_STREAM, 0);
+	DIE(sockfd < 0, "Connection to server failed...\n");
 
-    std::unordered_map<std::string, void(*)(char *&, char *&)> commands;
-    build_functions(commands);
+	std::unordered_map<std::string, void(*)(char *&, char *&)> commands;
+	build_functions(commands);
 
-    std::string input;
-    char *cookie = nullptr;
-    char *jwt = nullptr;
+	std::string input;
+	char *cookie = nullptr;
+	char *jwt = nullptr;
 
-    while (!stop) {
-        std::getline(std::cin, input);
+	while (!stop) {
+		std::getline(std::cin, input);
 
-        if (commands.find(input) == commands.end()) {
-            fprintf(stderr, "Invalid command, seek --help\n");
-            continue;
-        }
+		/* Invalid command check */
+		if (commands.find(input) == commands.end()) {
+			fprintf(stderr, "Invalid command, seek --help\n");
+			continue;
+		}
 
-        auto function = commands[input];
-        function(cookie, jwt);
-    }
+		auto function = commands[input];
+		function(cookie, jwt);
+	}
+	
+	/* Cookie and jwt are dynamically allocated when they store information */
+	if (cookie)
+		delete[] cookie;
 
-    if (cookie)
-        delete[] cookie;
+	if (jwt)
+		delete[] jwt;
 
-    if (jwt)
-        delete[] jwt;
-
-    close(sockfd);
-
-    return 0;
+	close(sockfd);
+	return 0;
 }

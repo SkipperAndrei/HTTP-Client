@@ -15,7 +15,6 @@ char *compute_get_request(const char *host, const char *url, char *query_params,
 	char *message = (char *) calloc(BUFLEN, sizeof(char));
 	char *line = (char *) calloc(LINELEN, sizeof(char));
 
-	// Step 1: write the method name, URL, request params (if any) and protocol type
 	if (query_params) {
 		sprintf(line, "GET %s?%s HTTP/1.1", url, query_params);
 	} else {
@@ -24,14 +23,12 @@ char *compute_get_request(const char *host, const char *url, char *query_params,
 
 	compute_message(message, line);
 
-	// Step 2: add the host
 	memset(line, 0, LINELEN);
 	if (host) {
 		sprintf(line, "Host: %s", host);
 		compute_message(message, line);
 	}
 	
-	// Step 3 (optional): add headers and/or cookies, according to the protocol format
 	if (cookie) {
 	   sprintf(line, "Cookie: session=%s", cookie);
 	   compute_message(message, line);
@@ -41,7 +38,7 @@ char *compute_get_request(const char *host, const char *url, char *query_params,
 		sprintf(line, "Authorization: Bearer %s", jwt);
 		compute_message(message, line);
 	}
-	// Step 4: add final new line
+	
 	compute_message(message, "");
 	free(line);
 	return message;
@@ -54,14 +51,9 @@ char *compute_put_request(const char *host, const char *url, const char* content
 	char *line = (char *) calloc(LINELEN, sizeof(char));
 	char *body_data_buffer = (char *) calloc(LINELEN, sizeof(char));
 
-	// Step 1: write the method name, URL and protocol type
 	sprintf(line, "PUT %s HTTP/1.1", url);
 	compute_message(message, line);
-	
-	// Step 2: add the host
-	/* Step 3: add necessary headers (Content-Type and Content-Length are mandatory)
-			in order to write Content-Length you must first compute the message size
-	*/
+
 	if (host) {
 		sprintf(line, "Host: %s", host);
 		compute_message(message, line);
@@ -87,7 +79,7 @@ char *compute_put_request(const char *host, const char *url, const char* content
 
 	sprintf(line, "Content-length: %lu", strlen(body_data_buffer));
 	compute_message(message, line);
-	// Step 4 (optional): add cookies
+	
 	if (cookie) {
 		sprintf(line, "Cookie: session=%s", cookie);
 		compute_message(message, line);
@@ -97,10 +89,9 @@ char *compute_put_request(const char *host, const char *url, const char* content
 		sprintf(line, "Authorization: Bearer %s", jwt);
 		compute_message(message, line);
 	}
-	// Step 5: add new line at end of header
 
 	compute_message(message, "");
-	// Step 6: add the actual payload data
+
 	memset(line, 0, LINELEN);
 	strcat(message, body_data_buffer);
 
@@ -116,14 +107,9 @@ char *compute_post_request(const char *host, const char *url, const char* conten
 	char *line = (char *) calloc(LINELEN, sizeof(char));
 	char *body_data_buffer = (char *) calloc(LINELEN, sizeof(char));
 
-	// Step 1: write the method name, URL and protocol type
 	sprintf(line, "POST %s HTTP/1.1", url);
 	compute_message(message, line);
-	
-	// Step 2: add the host
-	/* Step 3: add necessary headers (Content-Type and Content-Length are mandatory)
-			in order to write Content-Length you must first compute the message size
-	*/
+
 	if (host) {
 		sprintf(line, "Host: %s", host);
 		compute_message(message, line);
@@ -149,7 +135,7 @@ char *compute_post_request(const char *host, const char *url, const char* conten
 
 	sprintf(line, "Content-length: %lu", strlen(body_data_buffer));
 	compute_message(message, line);
-	// Step 4 (optional): add cookies
+
 	if (cookie) {
 		sprintf(line, "Cookie: session=%s", cookie);
 		compute_message(message, line);
@@ -159,10 +145,8 @@ char *compute_post_request(const char *host, const char *url, const char* conten
 		sprintf(line, "Authorization: Bearer %s", jwt);
 		compute_message(message, line);
 	}
-	// Step 5: add new line at end of header
 
 	compute_message(message, "");
-	// Step 6: add the actual payload data
 	memset(line, 0, LINELEN);
 	strcat(message, body_data_buffer);
 
