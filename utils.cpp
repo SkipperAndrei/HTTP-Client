@@ -76,7 +76,8 @@ void delete_from_collection(char *cookie, char *jwt, std::string coll_id_s, int 
     std::string url;
     url.append(COLLECTION_OPS_URL);
     url.append(coll_id_s);
-    url.append(MOVIE_TERMINATOR);
+    url.append(MOVIE_NOT_TERM);
+    url.append(std::to_string(movie_id));
 
     json payload;
     payload["id"] = movie_id;
@@ -88,8 +89,15 @@ void delete_from_collection(char *cookie, char *jwt, std::string coll_id_s, int 
     char *response;
 
     message = compute_delete_request(SERVER_IP, url.data(), nullptr, cookie, jwt);
+    
+    /* Debug */
+    // std::cout << message << "\n";
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
+
+    /* Debug */
+    // std::cout << response << "\n";
+
     restart_connection();
 
 
@@ -1050,22 +1058,35 @@ void delete_collection(char *&cookie, char *&jwt) {
         return;
     }
 
-    std::cout << "collection_id=";
-    std::string coll_id_s;
-    std::getline(std::cin, coll_id_s);
+    std::cout << "id=";
+    std::string id_s;
+    std::getline(std::cin, id_s);
 
-    std::cout << "movie_id=";
-    std::string movie_id_s;
-    std::getline(std::cin, movie_id_s);
+    int coll_id = check_valid_integer(id_s);
 
-    int movie_id = check_valid_integer(movie_id_s), coll_id = check_valid_integer(coll_id_s);
-
-    if (coll_id < 0 || movie_id < 0) {
+    if (coll_id < 0)
         return;
-    }
+
+    std::string url;
+    url.append(COLLECTION_OPS_URL);
+    url.append(id_s);
+
+    char *message;
+    char *response;
+
+    message = compute_delete_request(SERVER_IP, url.data(), nullptr, cookie, jwt);
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    restart_connection();
+
+    if (strstr(response, "OK"))
+        std::cout << "SUCCESS: Collection deleted\n";
+    else
+        fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
 
 
-
+    free(message);
+    free(response);
 }
 
 void add_movie_to_collection(char *&cookie, char *&jwt) {

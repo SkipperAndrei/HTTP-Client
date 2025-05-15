@@ -13,5 +13,6 @@
 #define BASE_COLLECTION_URL "/api/v1/tema/library/collections"
 #define COLLECTION_OPS_URL "/api/v1/tema/library/collections/"
 #define MOVIE_TERMINATOR "/movies"
+#define MOVIE_NOT_TERM "/movies/"
 
 #endif
