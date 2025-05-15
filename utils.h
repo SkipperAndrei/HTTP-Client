@@ -46,7 +46,7 @@ extern bool logged_as_admin;
 int check_valid_integer(std::string number);
 double check_valid_double(std::string number);
 void extract_from_movie_json(char *response);
-void append_movie_at_collection(char *cookie, char *jwt, std::string coll, int movie_id);
+bool append_movie_at_collection(char *cookie, char *jwt, std::string coll, int movie_id);
 void delete_from_collection(char *cookie, char *jwt, std::string coll_id_s, int movie_id);
 void restart_connection();
 void log_admin(char *&cookie, char *&jwt);

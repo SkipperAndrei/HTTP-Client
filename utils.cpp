@@ -39,7 +39,7 @@ void restart_connection() {
     DIE(sockfd < 0, "Connection to server failed...\n");
 }
 
-void append_movie_at_collection(char *cookie, char *jwt, std::string coll_id_s, int movie_id) {
+bool append_movie_at_collection(char *cookie, char *jwt, std::string coll_id_s, int movie_id) {
 
     std::string url;
     url.append(COLLECTION_OPS_URL);
@@ -50,7 +50,7 @@ void append_movie_at_collection(char *cookie, char *jwt, std::string coll_id_s, 
     payload["id"] = movie_id;
 
     std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
+    char *ptr_payload = (char *) serialized_json.data();
 
     char *message;
     char *response;
@@ -65,10 +65,14 @@ void append_movie_at_collection(char *cookie, char *jwt, std::string coll_id_s, 
         std::cout << "SUCCESS: Movie added to collection successfully\n";
     } else {
         fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
+        free(message);
+        free(response);
+        return false;
     }
 
     free(message);
     free(response);
+    return true;
 }
 
 void delete_from_collection(char *cookie, char *jwt, std::string coll_id_s, int movie_id) {
@@ -79,24 +83,13 @@ void delete_from_collection(char *cookie, char *jwt, std::string coll_id_s, int 
     url.append(MOVIE_NOT_TERM);
     url.append(std::to_string(movie_id));
 
-    json payload;
-    payload["id"] = movie_id;
-
-    std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
-
     char *message;
     char *response;
 
     message = compute_delete_request(SERVER_IP, url.data(), nullptr, cookie, jwt);
-    
-    /* Debug */
-    // std::cout << message << "\n";
+
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     restart_connection();
 
@@ -143,10 +136,8 @@ void log_admin(char*& cookie, char*& jwt) {
     payload["password"] = password;
 
     std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
+    char *ptr_payload = (char *) serialized_json.data();
 
-    // /* Debug */
-    // std::cout << ptr_payload << "\n";
     char *message;
     char *response;
 
@@ -155,9 +146,6 @@ void log_admin(char*& cookie, char*& jwt) {
     response = receive_from_server(sockfd);
 
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
         fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
@@ -213,9 +201,6 @@ void add_user(char *&cookie, char *&jwt) {
         return;
     }
 
-    /* Debug */
-    // std::cout << cookie << "\n";
-
     if (!logged_as_admin) {
         fprintf(stderr, "ERROR: Command is requested by non-admin user\n");
         return;
@@ -238,7 +223,7 @@ void add_user(char *&cookie, char *&jwt) {
     payload["password"] = password;
 
     std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
+    char *ptr_payload = (char *)serialized_json.data();
 
     char *message;
     char *response = nullptr;
@@ -248,9 +233,6 @@ void add_user(char *&cookie, char *&jwt) {
     response = receive_from_server(sockfd);
 
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (!strstr(response, "CREATED"))
         fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
@@ -280,9 +262,6 @@ void get_users(char *&cookie, char *&jwt) {
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: Command returned list of users\n";
@@ -332,17 +311,11 @@ void delete_users(char *&cookie, char *&jwt) {
     std::string url;
     url.append(ADMIN_DELETE_USER_URL);
     url.append(username);
-    
-    /* Debug */
-    // std::cout << url << "\n";
 
     message = compute_delete_request(SERVER_IP, (const char *) url.data(), nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
-    
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: User " << username << " was deleted\n";
@@ -371,13 +344,8 @@ void logout_admin(char *&cookie, char *&jwt) {
     message = compute_get_request(SERVER_IP, ADMIN_LOGOUT_URL, nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
-
-    /* Debug */
-    // std::cout << response << "\n";
-
     restart_connection();
 
-    /* TODO: Add JWT logic */
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: Admin successfully logged out\n";
         delete[] cookie;
@@ -420,7 +388,7 @@ void login(char *&cookie, char *&jwt) {
     payload["password"] = password;
 
     std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
+    char *ptr_payload = (char *) serialized_json.data();
 
     char *message;
     char *response;
@@ -430,9 +398,6 @@ void login(char *&cookie, char *&jwt) {
     response = receive_from_server(sockfd);
 
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
         fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
@@ -489,9 +454,6 @@ void get_access(char *&cookie, char *&jwt) {
         return;
     }
 
-    /* Debug */
-    // std::cout << "Before : " << cookie << "\n";
-
     char *message;
     char *response;
 
@@ -499,9 +461,6 @@ void get_access(char *&cookie, char *&jwt) {
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (!strstr(response, "OK")) {
         fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
@@ -516,15 +475,10 @@ void get_access(char *&cookie, char *&jwt) {
 
     if (jwt) {
         strcpy(jwt, jwt_token.data());
-        // std::cout << jwt << "\n";
     } else {
         jwt = new char[JWT_MAX_LENGTH];
         strcpy(jwt, jwt_token.data());
-        // std::cout << jwt << "\n";
     }
-
-    /* Debug */
-    // std::cout << "After : " << cookie << "\n";
 
     std::cout << "SUCCESS: JWT received from server\n";
 
@@ -563,14 +517,10 @@ void get_movies(char *&cookie, char *&jwt) {
         return;
     }
 
-    /* Debug */
-    // std::cout << response << "\n";
-
     std::cout << "SUCCESS: This is movie list\n";
     std::string string_payload(basic_extract_json_response(response));
 
     json json_payload = json::parse(string_payload);
-    int cnt = 1;
 
     for (auto &entry : json_payload["movies"])
         std::cout << "#" << entry["id"] << " " << entry["title"].get<std::string>() << "\n"; 
@@ -612,16 +562,11 @@ void get_movie(char *&cookie, char *&jwt) {
     movie_url.append(SPECIFIC_MOVIE_URL);
     movie_url.append(id_s.data());
 
-    /* Debug */
-    // std::cout << movie_url << "\n";
 
     message = compute_get_request(SERVER_IP, movie_url.data(), nullptr, cookie, jwt);
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "OK"))
         extract_from_movie_json(response);
@@ -686,19 +631,15 @@ void add_movie(char *&cookie, char *&jwt) {
     payload["rating"] = rating; 
 
     std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
+    char *ptr_payload = (char *) serialized_json.data();
     char *message;
     char *response;
 
     message = compute_post_request(SERVER_IP, ALL_MOVIES_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
-    /* Debug */
-    // std::cout << message << "\n";
+
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "CREATED"))
         std::cout << "SUCCESS: Movie was added to the library\n";
@@ -735,11 +676,6 @@ void delete_movie(char *&cookie, char *&jwt) {
     if (integer_id == -1)
         return;
 
-    json payload;
-    payload["id"] = integer_id;
-    std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
-
     char *message;
     char *response;
 
@@ -751,9 +687,6 @@ void delete_movie(char *&cookie, char *&jwt) {
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "OK"))
         std::cout << "SUCCESS: Movie was successfully deleted\n";
@@ -824,7 +757,7 @@ void update_movie(char *&cookie, char *&jwt) {
 
 
     std::string serialized_json = payload.dump();
-    char *ptr_payload = serialized_json.data();
+    char *ptr_payload = (char *) serialized_json.data();
 
     char *message;
     char *response;
@@ -832,13 +765,8 @@ void update_movie(char *&cookie, char *&jwt) {
     message = compute_put_request(SERVER_IP, url.data(), CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
     send_to_server(sockfd, message);
 
-    /* Debug */
-    // std::cout << message << "\n";
     response = receive_from_server(sockfd);
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "OK"))
         std::cout << "SUCCESS: Movie updated successfully\n";
@@ -873,8 +801,6 @@ void get_collections(char *&cookie, char *&jwt) {
     response = receive_from_server(sockfd);
     restart_connection();
 
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: Collections details\n";
@@ -923,12 +849,6 @@ void get_collection(char *&cookie, char *&jwt) {
     url.append(COLLECTION_OPS_URL);
     url.append(id_s);
 
-    json payload;
-    payload["id"] = id;
-
-    std::string payload_serial = payload.dump();
-    char *ptr_payload = payload_serial.data();
-
     char *message;
     char *response;
 
@@ -936,9 +856,6 @@ void get_collection(char *&cookie, char *&jwt) {
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
-
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (strstr(response, "OK")) {
         std::cout << "SUCCESS: Collection details\n";
@@ -1011,16 +928,13 @@ void add_collection(char *&cookie, char *&jwt) {
     payload["title"] = title;
 
     std::string serialized_payload = payload.dump();
-    char *ptr_payload = serialized_payload.data();
+    char *ptr_payload = (char *) serialized_payload.data();
     message = compute_post_request(SERVER_IP, BASE_COLLECTION_URL, CONTENT_TYPE, &ptr_payload, 1, cookie, jwt);
 
-    // std::cout << message << "\n";
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
     restart_connection();
 
-    /* Debug */
-    // std::cout << response << "\n";
 
     if (!strstr(response, "CREATED")) {
         fprintf(stderr, "ERROR: %s\n", basic_extract_json_response(response));
@@ -1032,10 +946,11 @@ void add_collection(char *&cookie, char *&jwt) {
     json returned_json = json::parse(basic_extract_json_response(response));
     int coll_id = returned_json["id"];
 
-    // TODO: after making add_movie_to_collection
-    for (int i = 0; i < nr_of_movies; i++) {
-        append_movie_at_collection(cookie, jwt, std::to_string(coll_id), check_valid_integer(movie_ids[i]));
-    }
+    for (int i = 0; i < nr_of_movies; i++)
+        if (!append_movie_at_collection(cookie, jwt, std::to_string(coll_id),
+            check_valid_integer(movie_ids[i])))
+            
+            break;
 
     free(message);
     free(response);
@@ -1174,9 +1089,6 @@ void log_out(char *&cookie, char *&jwt) {
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
 
-    /* Debug */
-    // std::cout << response << "\n";
-
     restart_connection();
 
     if (strstr(response, "OK")) {
@@ -1204,7 +1116,6 @@ void exit(char *&cookie, char *&jwt) {
 }
 
 void build_functions(std::unordered_map<std::string, void(*)(char *&, char *&)> &commands) {
-
     commands["login_admin"] = &log_admin;
     commands["add_user"] = &add_user;
     commands["get_users"] = &get_users;
